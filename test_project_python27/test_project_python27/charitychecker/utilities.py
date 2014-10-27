@@ -6,9 +6,11 @@ for the operation of the django-charitychecker module.
 import urllib2
 import io
 import zipfile
+from contextlib import contextmanager
 from .models import IRSNonprofitData
 import re
 import os
+from django.db import transaction
 
 
 # Keep these global variables up-to-date
@@ -25,6 +27,9 @@ IRS_NONPROFIT_DATA_URL=(
 # version of publication 78 contained in their
 # zip file download
 TXT_FILE_NAME="data-download-pub78.txt"
+
+MOCK_DATA_LOCATION =os.path.join(
+    os.path.dirname(__file__), "mock-irs-data.txt")
 
 # variable to configure where you want publication
 # 78 and its update log to be stored on disk
@@ -61,7 +66,76 @@ def _normalize_data(f):
             yield nonprofit_string
 
 
-class IRSNonprofitDataContextManager(object):
+@contextmanager
+def open_zip_from_url(zip_url, file_name):
+    try:
+        # download zip data
+        zip_data = urllib2.urlopen(zip_url)
+        try:
+            # convert zip data to proper format
+            zip_data_buffer = io.BytesIO(zip_data.read())
+            try:
+                # create a ZipFile instance from data
+                zip_file = zipfile.ZipFile(zip_data_buffer)
+                try:
+                    # open the desired file from zip archive
+                    return_file = zip_file.open(file_name)
+                    yield return_file
+                finally:
+                    return_file.close()
+            finally:
+                zip_file.close()
+        finally:
+            zip_data_buffer.close()
+    finally:
+        zip_data.close()
+
+    
+class OpenZipFromURL(object):
+    """a context manager for opening a file from a zip
+    archive stored at some url location. Will download,
+    unzip, and return the file from the archive.
+    """
+
+    def __init__(self, zip_url, file_name, *args, **kwargs):
+        super(OpenZipFromURL, self).__init__(*args, **kwargs)
+        self.zip_url = zip_url
+        self.file_name = file_name
+
+    def __enter__(self):
+        try:
+            # download zip data
+            zip_data = urllib2.urlopen(self.zip_url)
+            try:
+                # convert zip data to proper format
+                zip_data_buffer = io.BytesIO(zip_data.read())
+                try:
+                    # create a ZipFile instance from data
+                    zip_file = zipfile.ZipFile(zip_data_buffer)
+                    try:
+                        # open the desired file from zip archive
+                        self.return_file = zip_file.open(self.file_name)
+                    except Exception as e:
+                        # if return file throws an exception,
+                        # make sure it gets closed.
+                        self.return_file.close()
+                        raise e
+                finally:
+                    zip_file.close()
+            finally:
+                zip_data_buffer.close()
+        finally:
+            zip_data.close()
+        # we know have return_file and all the other intermediary
+        # files are closed, freeing up the memory
+        return self.return_file
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # make sure that zip file is closed.
+        self.return_file.close()
+
+
+class IRSNonprofitDataContextManager(OpenZipFromURL):
     """a context manager for the nonprofit data
     (EINs and other identifying information)
     contained in IRS Publication 78.
@@ -74,85 +148,195 @@ class IRSNonprofitDataContextManager(object):
     the data every time, to catch new updates.
     """
 
-    def _download_irs_nonprofit_data(self):
-        """internal method downloading the irs
-        publication 78 data, unzipping it, and
-        writing the txt file to disk.
-        """
-        # with statements are not supported on
-        # some of these filetypes, so need to
-        # use try finally clauses.
-        try:
-            # download IRS data
-            irs_url_data = urllib2.urlopen(
-                IRS_NONPROFIT_DATA_URL)
-            try:
-                # convert IRS data to proper format
-                irs_zip_data = io.BytesIO(
-                    irs_url_data.read())
-                try:
-                    # extract zipfile from IRS data
-                    z = zipfile.ZipFile(irs_zip_data)
-                    z.extract(member=TXT_FILE_NAME,
-                              path=DATA_LOCATION)
-                finally:
-                    z.close()
-            finally:
-                irs_zip_data.close()
-        finally:
-            irs_url_data.close()
-    
+    def __init__(self):
+        super(IRSNonprofitDataContextManager, self).__init__(
+            zip_url=IRS_NONPROFIT_DATA_URL,
+            file_name=TXT_FILE_NAME)
+        
     def __enter__(self):
         # always get fresh copy of publication 78
         # before using it. This context manager
         # should only be used by functions/methods
         # meant to run asynchronously like _make_dbm.
-        self._download_irs_nonprofit_data()
-        self.pub78 = open(_irs_data_path, 'r')
-        
-        return _normalize_data(self.pub78)
+        return _normalize_data(
+            super(IRSNonprofitDataContextManager, self).__enter__())
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.pub78.close()
+        super(IRSNonprofitDataContextManager, self).__exit__(
+            exc_type, exc_value, traceback)
 
+
+class MockIRSData(object):
+
+    def __enter__(self):
+        self.data_file = open(MOCK_DATA_LOCATION)
+        return self.data_file
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.data_file.close()
+
+
+def update_database_from_file(file_manager, convert_line,
+                              pk_field, model):
+    """update the database in bulk using data from a file.
+    Inputs:
+        file_manager: a context manager that yields an
+            iterable where each line contains the data used
+            to update.
+
+        convert_line: a function converting each line returned
+            by the iterator into a dictionary mapping fields to
+            values.
+
+        pk_field: the name of the field which is the primary key
+            of the data stored in the database.
+
+        model: the model to be updated.
+    """
+    with file_manager as file_data:
+        with transaction.atomic():
+            db_data_map = {row.pk: row for row in model.objects.all()}
+            to_create = []
+            progress = 0
+            for line in file_data:
+                progress += 1
+                if progress % 1000 == 0:
+                    print progress
+                data = convert_line(line)
+                row = db_data_map.pop(data[pk_field], None)
+                if row:
+                    if reduce(
+                        lambda acc, (attr_name, attr_value):
+                            (getattr(row, attr_name) != attr_value) or acc,
+                        data.items(),
+                        False):
+                        for attr, value in data.items():
+                            setattr(row, attr, value)
+                        row.save()
+                else:
+                    to_create.append(model(**data))
+            model.objects.bulk_create(to_create)
+            model.objects.filter(pk__in=db_data_map).delete()
+## version 2
+##
+##    with file_manager() as file_data:
+##        with transaction.atomic():
+##            db_data_map = {row.pk: row for row in model.objects.all()}
+##            for line in file_data:
+##                data = convert_line(line)
+##                row = db_data_map.pop(data[pk_field], None)
+##                if row:
+##                    if reduce(
+##                        lambda acc, (attr_name, attr_value):
+##                            (getattr(row, attr_name) != attr_value) or acc,
+##                        data.items(),
+##                        False):
+##                        for attr, value in data.items():
+##                            setattr(row, attr, value)
+##                        row.save()
+##                else:
+##                    model(**data).save()
+##            model.objects.filter(pk__in=db_data_map).delete()
+## version 1 (if initial, do highly optimized bulk insert, otherwise, do checks
+            # but keep memory footprint low.
+##    with file_manager() as file_data:
+##        with transaction.atomic():
+##            if initial:
+##                model.objects.bulk_create([
+##                    model(**convert_line(line)) for line in file_data])
+##            else:
+##                for line in file_data:
+##                    data = convert_line(line)
+##                    try:
+##                        row = model.objects.get(
+##                            pk=data[pk_field])
+##                    except(model.DoesNotExist):
+##                        row = None
+##                    if row:
+##                        if reduce(
+##                            lambda acc, (attr_name, attr_value):
+##                                (getattr(row, attr_name) != attr_value) or acc,
+##                            data.items(),
+##                            False):
+##                            for attr, value in data.items():
+##                                setattr(row, attr, value)
+##                            row.save()
+##                    else:
+##                        model(**data).save()
+## version 0
+##
+##    with file_manager() as file_data:
+##        with transaction.atomic():
+##            for line in file_data:
+##                data = convert_line(line)
+##                try:
+##                    row = model.objects.get(
+##                        pk=data[pk_field])
+##                except(model.DoesNotExist):
+##                    row = None
+##                if row:
+##                    if reduce(
+##                        lambda acc, (attr_name, attr_value):
+##                            (getattr(row, attr_name) != attr_value) or acc,
+##                        data.items(),
+##                        False):
+##                        for attr, value in data.items():
+##                            setattr(row, attr, value)
+##                        row.save()
+##                else:
+##                    model(**data).save()
+            
 
 def update_charitychecker_data():
-    """download a fresh copy of IRS Pub78, process
-    the data and update it into the database.
-    """
-    with IRSNonprofitDataContextManager() as irs_data:
-        for nonprofit_string in irs_data:
-            string_data = nonprofit_string.split('|')
-            nonprofit_data = {
-                'ein': string_data[0],
-                'name': string_data[1],
-                'city': string_data[2],
-                'state': string_data[3],
-                'country': string_data[4],
-                'deductability_code': string_data[5]}
-            try:
-                nonprofit = IRSNonprofitData.objects.get(
-                    pk=nonprofit_data['ein'])
-            except(IRSNonprofitData.DoesNotExist):
-                nonprofit = None
-            if nonprofit:
-                # since there is a nonprofit, run the following code
-                # if any of the fields have been changed.
-                if reduce(
-                    # fold over nonprofit_data as (key, value) pairs,
-                    # checking if nonprofit.key != value, and accumulating
-                    # these checks into a final boolean, True if there has
-                    # been a change to the nonprofit's data.
-                    lambda x, y: (getattr(nonprofit, x[0]) != x[1]) or y,
-                    nonprofit.items(),
-                    False):
-                    # update each field on the model instance
-                    for attr, value in nonprofit_data.items():
-                        setattr(nonprofit, attr, value)
-                    # push updates to the database
-                    nonprofit.save()
-            else:
-                # since there's no nonprofit instance in the database with
-                # the EIN in consideration, create one.
-                IRSNonprofitData(**nonprofit_data).save()
+    update_database_from_file(
+        file_manager=open_zip_from_url(
+            IRS_NONPROFIT_DATA_URL, TXT_FILE_NAME),
+        convert_line=(
+            lambda ln: dict(zip(
+                ('ein', 'name', 'city', 'state', 'country', 'deductability_code'),
+                ln.split('|')))),
+        pk_field='ein',
+        model=IRSNonprofitData)
 
+##def update_charitychecker_data():
+##    """download a fresh copy of IRS Pub78, process
+##    the data and update it into the database.
+##    """
+##    with IRSNonprofitDataContextManager() as irs_data:
+##        for nonprofit_string in irs_data:
+##            string_data = nonprofit_string.split('|')
+##            nonprofit_data = {
+##                'ein': string_data[0],
+##                'name': string_data[1],
+##                'city': string_data[2],
+##                'state': string_data[3],
+##                'country': string_data[4],
+##                'deductability_code': string_data[5]}
+##            try:
+##                nonprofit = IRSNonprofitData.objects.get(
+##                    pk=nonprofit_data['ein'])
+##            except(IRSNonprofitData.DoesNotExist):
+##                nonprofit = None
+##            if nonprofit:
+##                # since there is a nonprofit, run the following code
+##                # if any of the fields have been changed.
+##                if reduce(
+##                    # fold over nonprofit_data as (key, value) pairs,
+##                    # checking if nonprofit.key != value, and accumulating
+##                    # these checks into a final boolean, True if there has
+##                    # been a change to the nonprofit's data.
+##                    lambda x, y: (getattr(nonprofit, x[0]) != x[1]) or y,
+##                    nonprofit_data.items(),
+##                    False):
+##                    # update each field on the model instance
+##                    for attr, value in nonprofit_data.items():
+##                        setattr(nonprofit, attr, value)
+##                    # push updates to the database
+##                    nonprofit.save()
+##            else:
+##                # since there's no nonprofit instance in the database with
+##                # the EIN in consideration, create one.
+##                IRSNonprofitData(**nonprofit_data).save()
+##
+##
+##

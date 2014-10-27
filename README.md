@@ -95,7 +95,7 @@ Of course, you can only run the command after charitychecker is installed into y
 
 Pull requests are welcome. Also check out [charitycheck](https://github.com/nalourie/charitycheck) for a general python equivalent of this package if you are interested in contributing.
 
-Suggestions for contributions are adding python 3 support, incorporating this module into a large family of modules/packages dealing with nonprofit data (but of course, following the UNIX philosophy is really important here. Do one thing and do it well!), and most importantly, refactoring the utilities module to allow you to put in mocks for the IRSNonprofitDataContextManager's downloading url, and the url that update_charitychecker_data passes to IRSNonprofitDataContextManager, as currently the test suite takes about 25 minutes.
+Suggestions for contributions are adding python 3 support, incorporating this module into a large family of modules/packages dealing with nonprofit data (but of course, following the UNIX philosophy is really important here. Do one thing and do it well!), and most importantly, refactoring the utilities module to allow you to put in mocks for the IRSNonprofitDataContextManager's downloading url, and the url that update_charitychecker_data passes to IRSNonprofitDataContextManager, as currently the test suite takes about 25 minutes. Another important contribution would be some optimization of the database interactions in updating and creating the nonprofit database, as an in-memory database can take hours to update.
 
 # Authors
 

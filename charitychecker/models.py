@@ -1,8 +1,5 @@
 from django.db import models
 
-########################
-# set up a celery task to autoupdate the app's data
-########################
 
 class IRSNonprofitData(models.Model):
     """model representing the data attached to each
@@ -12,10 +9,10 @@ class IRSNonprofitData(models.Model):
     ein = models.CharField(
         max_length=9, primary_key=True)
     name = models.CharField(max_length=100)
-    city = models.CharField(max_length=100)
-    state = models.CharField(max_length=100)
-    country = models.CharField(max_length=100)
-    deductability_code = models.CharField(max_length=7)
+    city = models.CharField(max_length=50)
+    state = models.CharField(max_length=2)
+    country = models.CharField(max_length=50)
+    deductability_code = models.CharField(max_length=5)
 
     def verify_nonprofit(
         ein, name=None, city=None, state=None,

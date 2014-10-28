@@ -7,12 +7,17 @@ class IRSNonprofitData(models.Model):
     """
     # make the nonprofit's EIN their primary key
     ein = models.CharField(
-        max_length=9, primary_key=True)
-    name = models.CharField(max_length=100)
-    city = models.CharField(max_length=50)
-    state = models.CharField(max_length=2)
-    country = models.CharField(max_length=50)
-    deductability_code = models.CharField(max_length=5)
+        max_length=9, primary_key=True, editable=False)
+    name = models.CharField(
+        max_length=100, editable=False)
+    city = models.CharField(
+        max_length=50, editable=False)
+    state = models.CharField(
+        max_length=2, editable=False)
+    country = models.CharField(
+        max_length=50, editable=False)
+    deductability_code = models.CharField(
+        max_length=5, editable=False)
 
     def verify_nonprofit(
         ein, name=None, city=None, state=None,

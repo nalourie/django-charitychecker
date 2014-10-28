@@ -8,14 +8,9 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         """download data and update the charitychecker
         database."""
-        import time
         self.stdout.write(
             "beginning to download data and update database\n"
             "This could take several minutes.")
-        time1 = time.time()
         update_charitychecker_data()
-        time2 = time.time()
-        self.stdout.write(
-            "took %0.3f ms" % ((time2 - time1)*1000))
         self.stdout.write(
             "finished updating the charitychecker database.")

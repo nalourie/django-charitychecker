@@ -19,6 +19,10 @@ class IRSNonprofitData(models.Model):
     deductability_code = models.CharField(
         max_length=5, editable=False)
 
+    class Meta:
+        verbose_name = "IRS nonprofit datum"
+        verbose_name_plural = "IRS nonprofit data"
+
     def verify_nonprofit(
         ein, name=None, city=None, state=None,
         country=None, deductability_code=None):

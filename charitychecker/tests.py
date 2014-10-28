@@ -1,11 +1,6 @@
 """
 unit/integration tests for the django-charitychecker package.
 """
-
-# because this test suite also tests the downloading and database
-# building functionality, it can take a very long time. If someone
-# wants to switch some of these tests to mocks, it'd be much
-# appreciated.
                
 import re
 import datetime
@@ -20,87 +15,23 @@ from .utilities import (ignore_blank_space, _normalize_data,
                         _irs_data_path)
 
 
-class TestIRSNonprofitDataContextManager(TestCase):
-    """test suite for the IRSNonprofitDataContextManager class."""
-    
-    # Some of these tests will have side effects,
-    # i.e., downloading a file to disk. Tests with side
-    # effects have been marked with a comment. These tests
-    # should not be run while the module is in use.
-    def test__download_irs_nonprofit_data(self):
-        # get fresh copy of irs and check for exceptions
-        # in writing permissions, internet connections,
-        # etc...
-        IRSNonprofitDataContextManager(
-            )._download_irs_nonprofit_data()
+# Global Variables/Mocks
 
-    def test_context_manager_updates_data(self):
-        """check that opening the context manager
-        updates the local irs pub78 data.
-        """
-        with open(_irs_data_path, 'a+') as irs_data:
-            irs_data.write("TESTSTRING_FOR_CHARITYCHECK")
-            found_test_phrase = False
-            irs_data.seek(-27, 2)
-            for line in irs_data:
-                if "TESTSTRING_FOR_CHARITYCHECK" in line:
-                    found_test_phrase = True
-            # check that the test fails before we use
-            # the context manager.
-            self.assertTrue(found_test_phrase)
-        with IRSNonprofitDataContextManager() as new_irs_data:
-            # see if we've overwritten the old file
-            found_test_phrase = False
-            for line in new_irs_data:
-                if "TESTSTRING_FOR_CHARITYCHECK" in line:
-                    found_test_phrase = True
-            # assert that the test phrase has been overwritten
-            self.assertFalse(found_test_phrase)
+MOCK_DATA_LOCATION =os.path.join(
+    os.path.dirname(__file__), "test_data/mock-irs-data.txt")
 
-    def test_file_format(self):
-        """check that the file downloaded from the IRS
-        is in the format we expect.
-        """
-        with IRSNonprofitDataContextManager() as irs_data:
-            in_expected_format = True
-            for line in irs_data:
-                m = re.match(
-                    # a regex to match the following:
-                    #     ein|name|city|state|country|deductability_code
-                    r'^\d{9}\|.+\|.+\|[A-Z]{2}\|.+\|[A-Z]{2,5}(?:,[A-Z]{2,5})*$',
-                    line)
-                in_expected_format = in_expected_format and bool(m)
-            self.assertTrue(in_expected_format)
+@contextmanager
+def mock_irs_data():
+    """context manager providing mock irs publication
+    78 data for doing tests.
+    """
+    with open(MOCK_DATA_LOCATION) as mock_data:
+        yield mock_data
+
+# End Global Variables
 
 
-class TestUpdateCharitycheckerData(TestCase):
-    """test suite for the update_charitychecker_data function."""
-        
-    def test_update_charitychecker_data_populates_db(self):
-        """test that when the update_charitychecker_data
-        function is called on an empty database, it populates
-        the tables.
-        """
-        # populate the database
-        print "before charity checker"
-        update_charitychecker_data()
-        print "after"
-        # check that all the information matches the
-        # information in IRS Publication 78
-        does_information_match = True
-        with IRSNonprofitDataContextManager() as irs_data:
-            for line in irs_data:
-                nonprofit_data = line.split('|')
-                nonprofit = IRSNonprofitData.objects.get(
-                    pk=nonprofit_data[0])
-                does_information_match = does_information_match and (
-                    nonprofit.name == nonprofit_data[1] and
-                    nonprofit.city == nonprofit_data[2] and
-                    nonprofit.state == nonprofit_data[3] and
-                    nonprofit.country == nonprofit_data[4] and
-                    nonprofit.deductability_code == nonprofit_data[5])
-        self.assertTrue(does_information_match)
-
+# Tests for utilities.py
 
 class TestIgnoreBlankSpace(TestCase):
     """test suite for the ignore_blank_space function."""
@@ -160,7 +91,99 @@ class TestNormalizeData(TestCase):
                     files_are_same = files_are_same and (
                         before_line == after_line)
                 self.assertTrue(files_are_same)
+                
 
+class TestOpenZipFromURL(TestCase):
+    pass
+
+
+class TestIRSNonprofitDataContextManager(TestCase):
+    """test suite for the IRSNonprofitDataContextManager class."""
+    
+    # Some of these tests will have side effects,
+    # i.e., downloading a file to disk. Tests with side
+    # effects have been marked with a comment. These tests
+    # should not be run while the module is in use.
+    def test__download_irs_nonprofit_data(self):
+        # get fresh copy of irs and check for exceptions
+        # in writing permissions, internet connections,
+        # etc...
+        IRSNonprofitDataContextManager(
+            )._download_irs_nonprofit_data()
+
+    def test_context_manager_updates_data(self):
+        """check that opening the context manager
+        updates the local irs pub78 data.
+        """
+        with open(_irs_data_path, 'a+') as irs_data:
+            irs_data.write("TESTSTRING_FOR_CHARITYCHECK")
+            found_test_phrase = False
+            irs_data.seek(-27, 2)
+            for line in irs_data:
+                if "TESTSTRING_FOR_CHARITYCHECK" in line:
+                    found_test_phrase = True
+            # check that the test fails before we use
+            # the context manager.
+            self.assertTrue(found_test_phrase)
+        with IRSNonprofitDataContextManager() as new_irs_data:
+            # see if we've overwritten the old file
+            found_test_phrase = False
+            for line in new_irs_data:
+                if "TESTSTRING_FOR_CHARITYCHECK" in line:
+                    found_test_phrase = True
+            # assert that the test phrase has been overwritten
+            self.assertFalse(found_test_phrase)
+
+    def test_file_format(self):
+        """check that the file downloaded from the IRS
+        is in the format we expect.
+        """
+        with IRSNonprofitDataContextManager() as irs_data:
+            in_expected_format = True
+            for line in irs_data:
+                m = re.match(
+                    # a regex to match the following:
+                    #     ein|name|city|state|country|deductability_code
+                    r'^\d{9}\|.+\|.+\|[A-Z]{2}\|.+\|[A-Z]{2,5}(?:,[A-Z]{2,5})*$',
+                    line)
+                in_expected_format = in_expected_format and bool(m)
+            self.assertTrue(in_expected_format)
+
+
+class TestUpdateDatabaseFromFile(TestCase):
+    pass
+
+
+class TestUpdateCharitycheckerData(TestCase):
+    """test suite for the update_charitychecker_data function."""
+        
+    def test_update_charitychecker_data_populates_db(self):
+        """test that when the update_charitychecker_data
+        function is called on an empty database, it populates
+        the tables.
+        """
+        # populate the database
+        print "before charity checker"
+        update_charitychecker_data()
+        print "after"
+        # check that all the information matches the
+        # information in IRS Publication 78
+        does_information_match = True
+        with IRSNonprofitDataContextManager() as irs_data:
+            for line in irs_data:
+                nonprofit_data = line.split('|')
+                nonprofit = IRSNonprofitData.objects.get(
+                    pk=nonprofit_data[0])
+                does_information_match = does_information_match and (
+                    nonprofit.name == nonprofit_data[1] and
+                    nonprofit.city == nonprofit_data[2] and
+                    nonprofit.state == nonprofit_data[3] and
+                    nonprofit.country == nonprofit_data[4] and
+                    nonprofit.deductability_code == nonprofit_data[5])
+        self.assertTrue(does_information_match)
+
+
+# Test models.py
 
 class TestIRSNonprofitData(TestCase):
     """test suite for the IRSNonprofitData model."""

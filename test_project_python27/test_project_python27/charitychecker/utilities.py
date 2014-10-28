@@ -3,17 +3,19 @@ utilities and general functionality necessary
 for the operation of the django-charitychecker module.
 """
 
+import re
+import os
 import urllib2
 import io
 import zipfile
 from contextlib import contextmanager
-from .models import IRSNonprofitData
-import re
-import os
 from django.db import transaction
+from .models import IRSNonprofitData
 
 
-# Keep these global variables up-to-date
+# Global Variables
+#
+# make sure these global variables are up-to-date
 
 # the url of the IRS publication 78, assumed to
 # be a zip folder containing a text file of
@@ -28,18 +30,8 @@ IRS_NONPROFIT_DATA_URL=(
 # zip file download
 TXT_FILE_NAME="data-download-pub78.txt"
 
-MOCK_DATA_LOCATION =os.path.join(
-    os.path.dirname(__file__), "mock-irs-data.txt")
+# End Global Variables
 
-# variable to configure where you want publication
-# 78 and its update log to be stored on disk
-DATA_LOCATION=os.path.join(
-    os.path.dirname(__file__), "data")
-
-# dynamically generated path to the irs publication
-# 78 file, do not edit/change this variable.
-_irs_data_path = os.path.join(
-    DATA_LOCATION, TXT_FILE_NAME)
 
 def ignore_blank_space(f):
     """given a text file, return a generator which skips
@@ -112,15 +104,6 @@ def irs_nonprofit_data_context_manager():
         zip_url=IRS_NONPROFIT_DATA_URL,
         file_name=TXT_FILE_NAME) as zipped_file:
         yield _normalize_data(zipped_file)
-
-
-@contextmanager
-def mock_irs_data():
-    """context manager providing mock irs publication
-    78 data for doing tests.
-    """
-    with open(MOCK_DATA_LOCATION) as mock_data:
-        yield mock_data
 
 
 def update_database_from_file(file_manager, convert_line,

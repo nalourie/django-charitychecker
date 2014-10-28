@@ -144,75 +144,7 @@ def update_database_from_file(file_manager, convert_line,
                     to_create.append(model(**data))
             model.objects.bulk_create(to_create)
             model.objects.filter(pk__in=db_data_map).delete()
-## version 2
-##
-##    with file_manager() as file_data:
-##        with transaction.atomic():
-##            db_data_map = {row.pk: row for row in model.objects.all()}
-##            for line in file_data:
-##                data = convert_line(line)
-##                row = db_data_map.pop(data[pk_field], None)
-##                if row:
-##                    if reduce(
-##                        lambda acc, (attr_name, attr_value):
-##                            (getattr(row, attr_name) != attr_value) or acc,
-##                        data.items(),
-##                        False):
-##                        for attr, value in data.items():
-##                            setattr(row, attr, value)
-##                        row.save()
-##                else:
-##                    model(**data).save()
-##            model.objects.filter(pk__in=db_data_map).delete()
-## version 1 (if initial, do highly optimized bulk insert, otherwise, do checks
-            # but keep memory footprint low.
-##    with file_manager() as file_data:
-##        with transaction.atomic():
-##            if initial:
-##                model.objects.bulk_create([
-##                    model(**convert_line(line)) for line in file_data])
-##            else:
-##                for line in file_data:
-##                    data = convert_line(line)
-##                    try:
-##                        row = model.objects.get(
-##                            pk=data[pk_field])
-##                    except(model.DoesNotExist):
-##                        row = None
-##                    if row:
-##                        if reduce(
-##                            lambda acc, (attr_name, attr_value):
-##                                (getattr(row, attr_name) != attr_value) or acc,
-##                            data.items(),
-##                            False):
-##                            for attr, value in data.items():
-##                                setattr(row, attr, value)
-##                            row.save()
-##                    else:
-##                        model(**data).save()
-## version 0
-##
-##    with file_manager() as file_data:
-##        with transaction.atomic():
-##            for line in file_data:
-##                data = convert_line(line)
-##                try:
-##                    row = model.objects.get(
-##                        pk=data[pk_field])
-##                except(model.DoesNotExist):
-##                    row = None
-##                if row:
-##                    if reduce(
-##                        lambda acc, (attr_name, attr_value):
-##                            (getattr(row, attr_name) != attr_value) or acc,
-##                        data.items(),
-##                        False):
-##                        for attr, value in data.items():
-##                            setattr(row, attr, value)
-##                        row.save()
-##                else:
-##                    model(**data).save()
-            
+
 
 def update_charitychecker_data():
     update_database_from_file(

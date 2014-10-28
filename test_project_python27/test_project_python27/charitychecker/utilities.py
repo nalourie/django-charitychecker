@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from django.db import transaction
 from .models import IRSNonprofitData
 
-
 # Global Variables
 #
 # make sure these global variables are up-to-date
@@ -147,6 +146,10 @@ def update_database_from_file(file_manager, convert_line,
 
 
 def update_charitychecker_data():
+    """update the charitychecker database with data from
+    IRS Publication 78, downloading a fresh copy of the
+    data from the IRS website.
+    """
     update_database_from_file(
         file_manager=irs_nonprofit_data_context_manager,
         convert_line=(

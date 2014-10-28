@@ -10,7 +10,7 @@ import os
 from django.test import TestCase
 from .models import IRSNonprofitData
 from .utilities import (ignore_blank_space, _normalize_data,
-                        IRSNonprofitDataContextManager,
+                        irs_nonprofit_data_context_manager,
                         update_charitychecker_data,
                         _irs_data_path)
 

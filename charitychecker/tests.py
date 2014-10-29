@@ -7,25 +7,51 @@ import datetime
 from StringIO import StringIO
 from itertools import izip
 import os
+from contextlib import contextmanager
 from django.test import TestCase
 from .models import IRSNonprofitData
 from .utilities import (ignore_blank_space, _normalize_data,
+                        open_zip_from_url,
                         irs_nonprofit_data_context_manager,
-                        update_charitychecker_data,
-                        _irs_data_path)
-
+                        update_database_from_file,
+                        update_charitychecker_data)
 
 # Global Variables/Mocks
 
-MOCK_DATA_LOCATION =os.path.join(
-    os.path.dirname(__file__), "test_data/mock-irs-data.txt")
+WITH_FORGNS_LOCATION = os.path.join(
+    # irs data for testing removal of FORGN
+    # registered nonprofits
+    os.path.dirname(__file__),
+    "test_data/test-data-with-FORGNS.txt")
+
+WITHOUT_FORGNS_LOCATION = os.path.join(
+    # irs data for testing removal of FORGN
+    # registered nonprofits
+    os.path.dirname(__file__),
+    "test_data/test-data-without-FORGNS.txt")
+
+MOCK_DATA_LOCATION_BEFORE = os.path.join(
+    # mock irs data for intializing the database
+    os.path.dirname(__file__), "test_data/mock-irs-data-before.txt")
+
+MOCK_DATA_LOCATION_AFTER = os.path.join(
+    # mock irs data for an update afterwards
+    os.path.dirname(__file__), "test_data/mock-irs-data-after.txt")
 
 @contextmanager
-def mock_irs_data():
+def irs_mock_data_before():
     """context manager providing mock irs publication
-    78 data for doing tests.
+    78 data for initializing the database.
     """
-    with open(MOCK_DATA_LOCATION) as mock_data:
+    with open(MOCK_DATA_LOCATION_BEFORE) as mock_data:
+        yield mock_data
+
+@contextmanager
+def irs_mock_data_after():
+    """context manager providing mock irs publication
+    78 data for testing update functionality.
+    """
+    with open(MOCK_DATA_LOCATION_AFTER) as mock_data:
         yield mock_data
 
 # End Global Variables
@@ -77,68 +103,37 @@ class TestNormalizeData(TestCase):
         FORGN entities.
         """
         files_are_same = True
-        before_filename = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "test-data-with-FORGNS.txt")
-        after_filename = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "test-data-without-FORGNS.txt")
-        with open(before_filename) as before:
-            with open(after_filename) as after:
+        with open(WITH_FORGNS_LOCATION) as before:
+            with open(WITHOUT_FORGNS_LOCATION) as after:
                 for before_line, after_line in izip(
                     _normalize_data(before),
                     ignore_blank_space(after)):
                     files_are_same = files_are_same and (
                         before_line == after_line)
                 self.assertTrue(files_are_same)
-                
+
 
 class TestOpenZipFromURL(TestCase):
+    """test suite for the open_zip_from_url context manager."""
     pass
 
 
 class TestIRSNonprofitDataContextManager(TestCase):
     """test suite for the IRSNonprofitDataContextManager class."""
     
-    # Some of these tests will have side effects,
-    # i.e., downloading a file to disk. Tests with side
-    # effects have been marked with a comment. These tests
-    # should not be run while the module is in use.
-    def test__download_irs_nonprofit_data(self):
-        # get fresh copy of irs and check for exceptions
-        # in writing permissions, internet connections,
-        # etc...
-        IRSNonprofitDataContextManager(
-            )._download_irs_nonprofit_data()
-
-    def test_context_manager_updates_data(self):
-        """check that opening the context manager
-        updates the local irs pub78 data.
+    def test_download_irs_nonprofit_data(self):
+        """download the irs nonprofit data as a sanity check to
+        see if exceptions get thrown for internet connections,
+        404, etc...
         """
-        with open(_irs_data_path, 'a+') as irs_data:
-            irs_data.write("TESTSTRING_FOR_CHARITYCHECK")
-            found_test_phrase = False
-            irs_data.seek(-27, 2)
-            for line in irs_data:
-                if "TESTSTRING_FOR_CHARITYCHECK" in line:
-                    found_test_phrase = True
-            # check that the test fails before we use
-            # the context manager.
-            self.assertTrue(found_test_phrase)
-        with IRSNonprofitDataContextManager() as new_irs_data:
-            # see if we've overwritten the old file
-            found_test_phrase = False
-            for line in new_irs_data:
-                if "TESTSTRING_FOR_CHARITYCHECK" in line:
-                    found_test_phrase = True
-            # assert that the test phrase has been overwritten
-            self.assertFalse(found_test_phrase)
+        with irs_nonprofit_data_context_manager() as irs_data:
+            pass
 
     def test_file_format(self):
         """check that the file downloaded from the IRS
         is in the format we expect.
         """
-        with IRSNonprofitDataContextManager() as irs_data:
+        with irs_nonprofit_data_context_manager() as irs_data:
             in_expected_format = True
             for line in irs_data:
                 m = re.match(
@@ -151,6 +146,7 @@ class TestIRSNonprofitDataContextManager(TestCase):
 
 
 class TestUpdateDatabaseFromFile(TestCase):
+    """test suite for the update_database_from_file function."""
     pass
 
 
@@ -163,13 +159,12 @@ class TestUpdateCharitycheckerData(TestCase):
         the tables.
         """
         # populate the database
-        print "before charity checker"
-        update_charitychecker_data()
-        print "after"
+        update_charitychecker_data(
+            file_manager=irs_mock_data_before)
         # check that all the information matches the
         # information in IRS Publication 78
         does_information_match = True
-        with IRSNonprofitDataContextManager() as irs_data:
+        with irs_mock_data_before() as irs_data:
             for line in irs_data:
                 nonprofit_data = line.split('|')
                 nonprofit = IRSNonprofitData.objects.get(
@@ -182,11 +177,55 @@ class TestUpdateCharitycheckerData(TestCase):
                     nonprofit.deductability_code == nonprofit_data[5])
         self.assertTrue(does_information_match)
 
+    def test_update_charitychecker_data_updates_db(self):
+        """test that when the update_charitychecker_data
+        function is called on a nonempty database that it
+        deletes, updates, and creates the proper nonprofits.
+        """
+        update_charitychecker_data(
+            file_manager=irs_mock_data_before)
+        self.assertTrue(
+            # check that nonprofit to be deleted is in data
+            IRSNonprofitData.objects.get(pk='010407276'))
+        with self.assertRaises(IRSNonprofitData.DoesNotExist):
+            # check that the nonprofit is not yet in the database
+            # 900410317|Blank Family Foundation|Long Lake|MN|United States|PF
+            IRSNonprofitData.objects.get(pk='900410317')
+        self.assertEquals(
+            # 010400845|Bauneg Beg Lake Association Inc.|N Berwick|ME|United States|PC
+            IRSNonprofitData.objects.get(pk='010400845').city,
+            'N Berwick')
+        # update database
+        update_charitychecker_data(
+            file_manager=irs_mock_data_after)
+        # check that the nonprofit was deleted
+        ## deleted nonprofit's data:
+        # 010407276|Sunrise Opportunities|Machias|ME|United States|PC
+        with self.assertRaises(IRSNonprofitData.DoesNotExist):
+            # check that the nonprofit was deleted
+            IRSNonprofitData.objects.get(pk='010407276')
+        # check that the nonprofit was created
+        self.assertTrue(
+            # check that the nonprofit was created
+            IRSNonprofitData.objects.get(pk='900410317'))
+        # check that the nonprofit was updated
+        self.assertEquals(
+            # 010400845|Bauneg Beg Lake Association Inc.|Calais|ME|United States|PC
+            IRSNonprofitData.objects.get(pk='010400845').city,
+            'Calais')
+
 
 # Test models.py
 
 class TestIRSNonprofitData(TestCase):
     """test suite for the IRSNonprofitData model."""
+
+    def setUp(self):
+        # add Red Cross to the database.
+        IRSNonprofitData(
+            ein='530196605', name='American National Red Cross',
+            city='Charlotte', state='NC', country='United States',
+            deductability_code='PC').save()
     
     # testing the verify_nonprofit method
     def test_verify_nonprofit_all_arguments_when_true(self):

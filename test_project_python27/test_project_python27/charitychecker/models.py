@@ -23,8 +23,9 @@ class IRSNonprofitData(models.Model):
         verbose_name = "IRS nonprofit datum"
         verbose_name_plural = "IRS nonprofit data"
 
+    @classmethod
     def verify_nonprofit(
-        ein, name=None, city=None, state=None,
+        cls, ein, name=None, city=None, state=None,
         country=None, deductability_code=None):
         """return true if there is a nonprofit in the
         charitychecker database with information matching
@@ -32,8 +33,8 @@ class IRSNonprofitData(models.Model):
         arguments, return false otherwise.
         """
         try:
-            nonprofit = self.objects.get(ein)
-        except(self.DoesNotExist):
+            nonprofit = cls.objects.get(pk=ein)
+        except(cls.DoesNotExist):
             return False
         nonprofit_verified = True
         for attr_name, arg_value in [
@@ -46,8 +47,10 @@ class IRSNonprofitData(models.Model):
                     arg_value == getattr(nonprofit, attr_name))
         return nonprofit_verified
 
+    @classmethod
     def get_deductability_code(
-        ein, name=None, city=None, state=None, country=None):
+        cls, ein, name=None, city=None, state=None,
+        country=None):
         """if a nonprofit is found in the charitychecker
         database with information matching the information
         provided as arguments to the function, then return that
@@ -55,8 +58,8 @@ class IRSNonprofitData(models.Model):
         empty string.
         """
         try:
-            nonprofit = self.objects.get(ein)
-        except(self.DoesNotExist):
+            nonprofit = cls.objects.get(pk=ein)
+        except(cls.DoesNotExist):
             return ''
         nonprofit_verified = True
         for attr_name, arg_value in [
@@ -70,6 +73,4 @@ class IRSNonprofitData(models.Model):
             return nonprofit.deductability_code
         else:
             return ''
-        
 
-            

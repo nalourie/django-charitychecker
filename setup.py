@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='django-charitychecker',
-    version='1.0',
+    version='1.1',
     author='Nicholas A. Lourie',
     author_email='developer.nick@kozbox.com',
     install_requires="django >= 1.6",

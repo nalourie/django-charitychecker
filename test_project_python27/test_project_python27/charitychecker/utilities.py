@@ -145,13 +145,16 @@ def update_database_from_file(file_manager, convert_line,
             model.objects.filter(pk__in=db_data_map).delete()
 
 
-def update_charitychecker_data():
+def update_charitychecker_data(
+    # use default value for file manager, allowing mocks to
+    # be passed in for testing.
+    file_manager=irs_nonprofit_data_context_manager):
     """update the charitychecker database with data from
     IRS Publication 78, downloading a fresh copy of the
     data from the IRS website.
     """
     update_database_from_file(
-        file_manager=irs_nonprofit_data_context_manager,
+        file_manager=file_manager,
         convert_line=(
             lambda ln: dict(zip(
                 ('ein', 'name', 'city', 'state', 'country', 'deductability_code'),

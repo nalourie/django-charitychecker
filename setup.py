@@ -10,7 +10,7 @@ setup(
               'charitychecker.management',
               'charitychecker.management.commands'],
     license='MIT License',
-    description=('a small django app to verify information'
+    description=('a small django app to verify information '
                  'about nonprofits using their EINs'),
     long_description=open('README.rst').read(),
     include_package_data=True,

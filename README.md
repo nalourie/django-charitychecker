@@ -83,7 +83,7 @@ with IRSNonprofitDataContextManager() as irs_data:
 
 The Publication 78 file is a series of lines of the form ```ein|name|city|state|country|deductability_code```.
 
-#### ````update_database_from_file```
+#### ```update_database_from_file```
 
 A function that takes ```file_manager```, ```convert_line```, ```pk_field```, and ```model``` arguments, then uses a file to update in bulk your application's database. Specifically, it takes:
 

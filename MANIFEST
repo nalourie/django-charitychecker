@@ -12,7 +12,6 @@ charitychecker\admin.py
 charitychecker\models.py
 charitychecker\tests.py
 charitychecker\utilities.py
-charitychecker\data\.gitignore
 charitychecker\management\__init__.py
 charitychecker\management\commands\__init__.py
 charitychecker\management\commands\update_charitychecker_data.py

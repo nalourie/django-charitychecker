@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='django-charitychecker',
-    version='1.2',
+    version='1.3',
     author='Nicholas A. Lourie',
     author_email='developer.nick@kozbox.com',
     install_requires="",

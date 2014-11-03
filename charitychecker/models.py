@@ -22,6 +22,19 @@ class IRSNonprofitData(models.Model):
     class Meta:
         verbose_name = "IRS nonprofit datum"
         verbose_name_plural = "IRS nonprofit data"
+        
+    # string/printing methods
+    
+    def __unicode__(self):
+        return unicode("{name}, EIN: {ein}".format(
+            name=self.name, ein=self.ein))
+
+    def __repr__(self):
+        return str("<Nonprofit with EIN={ein}>".format(
+                ein=self.ein))
+
+    def __str__(self):
+        return str(unicode(self))
 
     @classmethod
     def verify_nonprofit(

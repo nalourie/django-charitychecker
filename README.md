@@ -128,6 +128,7 @@ Suggestions for contributing:
 - python 3 support
 - incorporate this module into a larger family of modules/packages dealing with nonprofit data (but of course, following the UNIX philosophy is really important here. Do one thing and do it well!)
 - writing tests for the ```open_zip_from_url``` and ```update_database_from_file``` functions which currently are only tested indirectly by the tests on ```irs_nonprofit_data_context_manager``` and ```update_charitychecker_data```, which are both wrappers for these more general functions.
+- add tests for the newly added string methods on the IRSNonprofitData model.
 
 # Authors
 

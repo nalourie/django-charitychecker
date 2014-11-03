@@ -130,8 +130,8 @@ a generator. Use is as you would any context manager:
 The Publication 78 file is a series of lines of the form
 ``ein|name|city|state|country|deductability_code``.
 
-\`\ ``update_database_from_file``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``update_database_from_file``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A function that takes ``file_manager``, ``convert_line``, ``pk_field``,
 and ``model`` arguments, then uses a file to update in bulk your
@@ -223,6 +223,8 @@ Suggestions for contributing:
    ``irs_nonprofit_data_context_manager`` and
    ``update_charitychecker_data``, which are both wrappers for these
    more general functions.
+-  add tests for the newly added string methods on the IRSNonprofitData
+   model.
 
 Authors
 =======
